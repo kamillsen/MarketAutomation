@@ -110,23 +110,37 @@ namespace BarcodeMarketApp.Forms
         // Satışı tamamla butonuna tıklanınca: stok düş, satış kaydet, sepeti temizle
         private void btnCompleteSale_Click(object sender, EventArgs e)
         {
+            // 1. Stok kontrolü
             foreach (var item in cartService.Items)
             {
                 bool success = dbService.ReduceStock(item.Product.Barcode, item.Quantity);
-
                 if (!success)
                 {
                     MessageBox.Show($"'{item.Product.Name}' için yeterli stok yok!", "Stok Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
-
-                dbService.InsertSale(item.Product.Barcode, item.Quantity, item.TotalPrice);
             }
 
+            // 2. Toplam fiyat
+            decimal total = cartService.GetTotal();
+
+            // 3. Yeni satış kaydı oluştur
+            int saleId = dbService.InsertSale(total);
+
+            // 4. Her ürünü sale_items tablosuna yaz
+            foreach (var item in cartService.Items)
+            {
+                dbService.InsertSaleItem(saleId, item.Product.Barcode, item.Quantity, item.Product.Price);
+            }
+
+            // 5. Temizle ve bilgilendir
             cartService.ClearCart();
             UpdateCartView();
 
             MessageBox.Show("Satış başarıyla tamamlandı!", "Satış Tamam", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
+
+
+
     }
 }

@@ -9,16 +9,15 @@ namespace BarcodeMarketApp.Database
         // Veritabanı bağlantı nesnesi
         private readonly NpgsqlConnection connection;
 
-        // Yapıcı metot (constructor): bağlantıyı başlatır
+        // Constructor: bağlantıyı başlatır
         public DatabaseService()
         {
-            // PostgreSQL bağlantı dizesi — kendi bilgilerine göre güncelle!
             string connString = "Host=localhost;Port=5432;Username=postgres;Password=postgres;Database=barcode_db";
             connection = new NpgsqlConnection(connString);
             connection.Open();
         }
 
-        // Barkoda göre ürün getirme
+        // ✅ Barkoda göre ürün getir
         public Product GetProductByBarcode(string barcode)
         {
             using var cmd = new NpgsqlCommand("SELECT * FROM product WHERE barcode = @b", connection);
@@ -29,66 +28,53 @@ namespace BarcodeMarketApp.Database
             {
                 return new Product
                 {
-                    Id = reader.GetInt32(0),         // id INTEGER
-                    Barcode = reader.GetString(1),   // barcode TEXT
-                    Name = reader.GetString(2),      // name TEXT
-                    Price = reader.GetDecimal(3),    // price NUMERIC
-                    Stock = reader.GetInt32(4)       // stock INTEGER
+                    Id = reader.GetInt32(0),
+                    Barcode = reader.GetString(1),
+                    Name = reader.GetString(2),
+                    Price = reader.GetDecimal(3),
+                    Stock = reader.GetInt32(4)
                 };
             }
 
             return null;
         }
 
-
-
-        // Tüm ürünleri listele
+        // ✅ Tüm ürünleri getir
         public List<Product> GetAllProducts()
         {
             var products = new List<Product>();
-
             using var cmd = new NpgsqlCommand("SELECT id, barcode, name, price, stock FROM product", connection);
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
                 products.Add(new Product
                 {
-                    Id = reader.GetInt32(0),          // ✅ id INTEGER
-                    Barcode = reader.GetString(1),    // ✅ barcode TEXT
-                    Name = reader.GetString(2),       // ✅ name TEXT
-                    Price = reader.GetDecimal(3),     // ✅ price NUMERIC
-                    Stock = reader.GetInt32(4)        // ✅ stock INTEGER
+                    Id = reader.GetInt32(0),
+                    Barcode = reader.GetString(1),
+                    Name = reader.GetString(2),
+                    Price = reader.GetDecimal(3),
+                    Stock = reader.GetInt32(4)
                 });
             }
-
             return products;
         }
 
-
-        // Stoktan düşme işlemi
+        // ✅ Stok azaltma
         public bool ReduceStock(string barcode, int quantity)
         {
-            using var cmd = new NpgsqlCommand("UPDATE product SET stock = stock - @q WHERE barcode = @b AND stock >= @q", connection);
+            using var cmd = new NpgsqlCommand(
+                "UPDATE product SET stock = stock - @q WHERE barcode = @b AND stock >= @q", connection);
             cmd.Parameters.AddWithValue("@b", barcode);
             cmd.Parameters.AddWithValue("@q", quantity);
 
             return cmd.ExecuteNonQuery() > 0;
         }
 
-        // Satış kaydı oluştur
-        public void InsertSale(string barcode, int quantity, decimal totalPrice)
-        {
-            using var cmd = new NpgsqlCommand("INSERT INTO sales (barcode, quantity, total_price) VALUES (@b, @q, @t)", connection);
-            cmd.Parameters.AddWithValue("@b", barcode);
-            cmd.Parameters.AddWithValue("@q", quantity);
-            cmd.Parameters.AddWithValue("@t", totalPrice);
-
-            cmd.ExecuteNonQuery();
-        }
-
+        // ✅ Yeni ürün ekleme
         public void InsertProduct(Product product)
         {
-            using var cmd = new NpgsqlCommand("INSERT INTO product (barcode, name, price, stock) VALUES (@b, @n, @p, @s)", connection);
+            using var cmd = new NpgsqlCommand(
+                "INSERT INTO product (barcode, name, price, stock) VALUES (@b, @n, @p, @s)", connection);
             cmd.Parameters.AddWithValue("@b", product.Barcode);
             cmd.Parameters.AddWithValue("@n", product.Name);
             cmd.Parameters.AddWithValue("@p", product.Price);
@@ -97,5 +83,27 @@ namespace BarcodeMarketApp.Database
             cmd.ExecuteNonQuery();
         }
 
+        // ✅ YENİ: sales tablosuna satış kaydı (sadece toplam tutar)
+        public int InsertSale(decimal totalPrice)
+        {
+            using var cmd = new NpgsqlCommand(
+                "INSERT INTO sales (total_price) VALUES (@total) RETURNING id", connection);
+            cmd.Parameters.AddWithValue("@total", totalPrice);
+            return (int)cmd.ExecuteScalar();
+        }
+
+        // ✅ YENİ: sale_items tablosuna ürün detayları kaydı
+        public void InsertSaleItem(int saleId, string barcode, int quantity, decimal price)
+        {
+            using var cmd = new NpgsqlCommand(@"
+                INSERT INTO sale_items (sale_id, barcode, quantity, price)
+                VALUES (@s, @b, @q, @p)", connection);
+
+            cmd.Parameters.AddWithValue("@s", saleId);
+            cmd.Parameters.AddWithValue("@b", barcode);
+            cmd.Parameters.AddWithValue("@q", quantity);
+            cmd.Parameters.AddWithValue("@p", price);
+            cmd.ExecuteNonQuery();
+        }
     }
 }
